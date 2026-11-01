@@ -37,7 +37,7 @@ class SpectrumAnalyzer(
             imaginary[i] = 0f
         }
 
-        fft()
+        fft(real, imaginary)
 
         val minHz = 45.0
         val maxHz = 16_000.0.coerceAtMost(sampleRate / 2.0)
@@ -74,54 +74,56 @@ class SpectrumAnalyzer(
         return smoothed.copyOf()
     }
 
-    private fun fft() {
-        var j = 0
-        for (i in 1 until fftSize) {
-            var bit = fftSize shr 1
-            while (j and bit != 0) {
-                j = j xor bit
-                bit = bit shr 1
-            }
-            j = j xor bit
-            if (i < j) {
-                val tr = real[i]
-                real[i] = real[j]
-                real[j] = tr
-                val ti = imaginary[i]
-                imaginary[i] = imaginary[j]
-                imaginary[j] = ti
-            }
-        }
+    companion object {
+        const val BAR_COUNT = 24
+    }
+}
 
-        var len = 2
-        while (len <= fftSize) {
-            val angle = -2.0 * PI / len
-            val wLenReal = cos(angle).toFloat()
-            val wLenImaginary = sin(angle).toFloat()
-            var offset = 0
-            while (offset < fftSize) {
-                var wReal = 1f
-                var wImaginary = 0f
-                for (i in 0 until len / 2) {
-                    val even = offset + i
-                    val odd = even + len / 2
-                    val oddReal = real[odd] * wReal - imaginary[odd] * wImaginary
-                    val oddImaginary = real[odd] * wImaginary + imaginary[odd] * wReal
-                    real[odd] = real[even] - oddReal
-                    imaginary[odd] = imaginary[even] - oddImaginary
-                    real[even] += oddReal
-                    imaginary[even] += oddImaginary
-                    val nextReal = wReal * wLenReal - wImaginary * wLenImaginary
-                    wImaginary = wReal * wLenImaginary + wImaginary * wLenReal
-                    wReal = nextReal
-                }
-                offset += len
-            }
-            len = len shl 1
+/** In-place radix-2 FFT; the size must be a power of two. */
+internal fun fft(real: FloatArray, imaginary: FloatArray) {
+    val fftSize = real.size
+    var j = 0
+    for (i in 1 until fftSize) {
+        var bit = fftSize shr 1
+        while (j and bit != 0) {
+            j = j xor bit
+            bit = bit shr 1
+        }
+        j = j xor bit
+        if (i < j) {
+            val tr = real[i]
+            real[i] = real[j]
+            real[j] = tr
+            val ti = imaginary[i]
+            imaginary[i] = imaginary[j]
+            imaginary[j] = ti
         }
     }
 
-    companion object {
-        const val BAR_COUNT = 24
+    var len = 2
+    while (len <= fftSize) {
+        val angle = -2.0 * PI / len
+        val wLenReal = cos(angle).toFloat()
+        val wLenImaginary = sin(angle).toFloat()
+        var offset = 0
+        while (offset < fftSize) {
+            var wReal = 1f
+            var wImaginary = 0f
+            for (i in 0 until len / 2) {
+                val even = offset + i
+                val odd = even + len / 2
+                val oddReal = real[odd] * wReal - imaginary[odd] * wImaginary
+                val oddImaginary = real[odd] * wImaginary + imaginary[odd] * wReal
+                real[odd] = real[even] - oddReal
+                imaginary[odd] = imaginary[even] - oddImaginary
+                real[even] += oddReal
+                imaginary[even] += oddImaginary
+                val nextReal = wReal * wLenReal - wImaginary * wLenImaginary
+                wImaginary = wReal * wLenImaginary + wImaginary * wLenReal
+                wReal = nextReal
+            }
+            offset += len
+        }
+        len = len shl 1
     }
 }

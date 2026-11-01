@@ -1,6 +1,7 @@
 package com.ctify.player.ui.player
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -33,10 +34,10 @@ import com.ctify.player.ui.skins.LiveProgress
 fun LyricsView(lyrics: Lyrics, live: LiveProgress, ink: Color, dim: Color, modifier: Modifier = Modifier) {
     val lines = lyrics.synced
     if (lines.isNullOrEmpty()) {
-        Text(
-            lyrics.plain.orEmpty(), color = ink, style = MaterialTheme.typography.bodyLarge,
-            modifier = modifier.verticalScroll(rememberScrollState()).padding(vertical = 12.dp),
-        )
+        Column(modifier.verticalScroll(rememberScrollState()).padding(vertical = 12.dp)) {
+            Text(lyrics.plain.orEmpty(), color = ink, style = MaterialTheme.typography.bodyLarge)
+            SourceLine(lyrics.source, dim)
+        }
         return
     }
     val current by remember(lines) { derivedStateOf { Lrc.indexAt(lines, live.positionMs) } }
@@ -59,5 +60,11 @@ fun LyricsView(lyrics: Lyrics, live: LiveProgress, ink: Color, dim: Color, modif
                     .padding(vertical = 6.dp),
             )
         }
+        item { SourceLine(lyrics.source, dim) }
     }
+}
+
+@Composable
+private fun SourceLine(source: String?, dim: Color) {
+    if (source != null) Text("Lyrics: $source", color = dim, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 16.dp))
 }

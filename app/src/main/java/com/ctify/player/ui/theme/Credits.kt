@@ -5,10 +5,14 @@ data class Credit(val name: String, val url: String, val license: String, val no
 
 object Credits {
     val entries: List<Credit> = listOf(
+        Credit("Nier Visualizer", "https://github.com/bogerchan/Nier-Visualizer", "Apache-2.0", "Visualizer renderers, vendored in third_party/nier"),
         Credit("Levyra", "https://github.com/LUC4N3X/Levyra-deepsound", "GPL-3.0", "Material 3 Expressive shape style; its NewPipe Extractor fork"),
         Credit("NewPipe Extractor", "https://github.com/TeamNewPipe/NewPipeExtractor", "GPL-3.0", "YouTube search, streams and downloads"),
         Credit("Radio Browser", "https://www.radio-browser.info", "Public domain data", "Radio stations"),
         Credit("LRCLIB", "https://lrclib.net", "Free API", "Synced lyrics"),
+        Credit("NetEase Cloud Music", "https://music.163.com", "Public web API", "Lyrics when LRCLIB has none"),
+        Credit("YouTube Music", "https://music.youtube.com", "InnerTube", "Lyrics for YouTube songs"),
+        Credit("Musixmatch", "https://www.musixmatch.com", "Unofficial API, opt-in", "Lyrics when switched on"),
         Credit("Last.fm", "https://www.last.fm", "Last.fm API terms", "Genres, artists and charts"),
         Credit("MusicBrainz", "https://musicbrainz.org", "CC0 core data", "Album info"),
         Credit("ListenBrainz", "https://listenbrainz.org", "CC0 listen data", "Scrobbling"),

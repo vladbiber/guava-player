@@ -14,8 +14,8 @@ android {
         applicationId = "com.ctify.player"
         minSdk = 26
         targetSdk = 36
-        versionCode = 30
-        versionName = "3.2.0"
+        versionCode = 31
+        versionName = "3.3.0"
         vectorDrawables { useSupportLibrary = true }
         // Last.fm key for genres and creators: local.properties, else the environment; blank hides those parts
         val lastFmKey = rootProject.file("local.properties").takeIf { it.exists() }
@@ -52,6 +52,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
         isCoreLibraryDesugaringEnabled = true
     }
+
+    // Nier Visualizer renderers, vendored (Apache-2.0)
+    sourceSets["main"].java.directories += "../third_party/nier/src"
+    sourceSets["main"].kotlin.directories += "../third_party/nier/src"
 
     buildFeatures {
         compose = true

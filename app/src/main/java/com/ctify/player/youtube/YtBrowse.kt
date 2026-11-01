@@ -16,7 +16,7 @@ data class YtPlaylistRef(val id: String, val title: String, val subtitle: String
 
 /** YouTube Music browse pages (moods, genres, charts) read straight from InnerTube as WEB_REMIX. */
 internal object YtBrowse {
-    private const val CLIENT_VERSION = "1.20260804.16.00"
+    const val CLIENT_VERSION = "1.20260804.16.00"
 
     suspend fun browse(browseId: String, params: String? = null): JSONObject {
         val session = runCatching { YtSession.current() }.getOrNull()

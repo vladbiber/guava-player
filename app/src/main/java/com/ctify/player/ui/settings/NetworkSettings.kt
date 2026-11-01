@@ -69,7 +69,10 @@ internal fun ColumnScope.NetworkSettings() {
         youtubeOn, { NetworkGate.setEnabled(Feature.YOUTUBE, it); if (it) Downloads.kick() }, enabled = !offline,
     )
     SwitchRow("Genres and creators (Last.fm)", "Genre and artist suggestions on Home", features[Feature.LASTFM] != false, { NetworkGate.setEnabled(Feature.LASTFM, it) }, enabled = !offline)
-    SwitchRow("Lyrics (LRCLIB)", "Synced lyrics in the player", features[Feature.LYRICS] != false, { NetworkGate.setEnabled(Feature.LYRICS, it) }, enabled = !offline)
+    val lyricsOn = features[Feature.LYRICS] != false
+    val musixmatch by NetworkGate.musixmatch.collectAsState()
+    SwitchRow("Lyrics", "From LRCLIB, NetEase and YouTube Music", lyricsOn, { NetworkGate.setEnabled(Feature.LYRICS, it) }, enabled = !offline)
+    SwitchRow("Lyrics from Musixmatch", "Unofficial API, may stop working", musixmatch, NetworkGate::setMusixmatch, enabled = !offline && lyricsOn)
     SwitchRow("Album info (MusicBrainz)", "Track lists, years, community ratings and discographies", features[Feature.MUSICBRAINZ] != false, { NetworkGate.setEnabled(Feature.MUSICBRAINZ, it) }, enabled = !offline)
 
     SectionHeader("Downloads", Modifier.padding(top = 16.dp, bottom = 4.dp))

@@ -58,6 +58,19 @@ import com.ctify.player.ui.songs.SongSheets
 import com.ctify.player.ui.songs.SongTarget
 import com.ctify.player.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
+
+/** Upward scroll left over at the end of the list stays here; passed on, it drags the sheet and it springs back. */
+private object KeepEndFling : NestedScrollConnection {
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) = if (available.y < 0) available.copy(x = 0f) else Offset.Zero
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity) = if (available.y < 0) available.copy(x = 0f) else Velocity.Zero
+}
 
 /** The play queue as a full sheet: tap plays, drag the handle to move, swipe left to take a song out. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,6 +87,8 @@ internal fun QueueSheet(onDismiss: () -> Unit) {
     var dragFrom by remember { mutableIntStateOf(-1) }
     var dragDelta by remember { mutableFloatStateOf(0f) }
     val ids = ui.queueIds
+    // rows are in play order; moves need the queue order, so dragging waits until shuffle is off
+    val canMove = ui.queueOrder.withIndex().all { it.index == it.value }
 
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerLow, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxHeight(0.9f)) {
@@ -84,18 +99,20 @@ internal fun QueueSheet(onDismiss: () -> Unit) {
                 if (loading) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
                 Text(note, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
             }
-            LazyColumn(Modifier.weight(1f), state = list, contentPadding = PaddingValues(bottom = 16.dp)) {
+            val bottom = androidx.compose.foundation.layout.WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            LazyColumn(Modifier.weight(1f).nestedScroll(KeepEndFling), state = list, contentPadding = PaddingValues(bottom = 16.dp + bottom)) {
                 // a queue can hold a song twice, so the position is part of the key
                 itemsIndexed(ids, key = { i, id -> "$i:$id" }) { index, id ->
                     val t = repository.trackById(id) ?: return@itemsIndexed
                     val current = index == ui.currentIndex
                     val dragging = index == dragFrom
+                    val at = ui.queueOrder.getOrElse(index) { index }
                     val row = @Composable {
                         Row(
                             Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)
                                 .then(if (dragging) Modifier.zIndex(1f).graphicsLayer { translationY = dragDelta } else Modifier)
                                 .semantics {
-                                    customActions = listOfNotNull(
+                                    if (canMove) customActions = listOfNotNull(
                                         CustomAccessibilityAction("Move up") { PlayerHub.moveInQueue(index, index - 1); true }.takeIf { index > 0 },
                                         CustomAccessibilityAction("Move down") { PlayerHub.moveInQueue(index, index + 1); true }.takeIf { index < ids.size - 1 },
                                     )
@@ -105,11 +122,11 @@ internal fun QueueSheet(onDismiss: () -> Unit) {
                             Box(Modifier.weight(1f)) {
                                 TrackRow(
                                     track = t, isCurrent = current, isPlaying = current && ui.isPlaying, isFavorite = false,
-                                    onClick = { PlayerHub.playQueueIndex(index) }, onToggleFavorite = null,
+                                    onClick = { PlayerHub.playQueueIndex(at) }, onToggleFavorite = null,
                                     onMore = { SongSheets.show(SongTarget.Song(t), SongContext.Other) },
                                 )
                             }
-                            Icon(
+                            if (canMove) Icon(
                                 Icons.Filled.DragHandle, "Drag to move ${t.title}", tint = TextSecondary,
                                 modifier = Modifier.size(48.dp).padding(12.dp).pointerInput(id, index) {
                                     var rowH = 1f
@@ -148,7 +165,7 @@ internal fun QueueSheet(onDismiss: () -> Unit) {
                         val state = rememberSwipeToDismissBoxState()
                         SwipeToDismissBox(
                             state = state, enableDismissFromStartToEnd = false,
-                            onDismiss = { if (it == SwipeToDismissBoxValue.EndToStart) PlayerHub.removeFromQueue(index) },
+                            onDismiss = { if (it == SwipeToDismissBoxValue.EndToStart) PlayerHub.removeFromQueue(at) },
                             backgroundContent = {
                                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.errorContainer), contentAlignment = Alignment.CenterEnd) {
                                     Icon(Icons.Filled.Delete, "Remove from queue", tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.padding(end = 20.dp))

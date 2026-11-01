@@ -32,9 +32,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 
-/** Color, sensitivity, smoothing, bar count, mirror and glow for every visualizer, with [preview] animating on top. */
+/** Color, sensitivity and glow for every visualizer, with [preview] animating on top. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VisualizerCustomizeSheet(preview: @Composable () -> Unit, onDismiss: () -> Unit) {
@@ -62,9 +61,6 @@ fun VisualizerCustomizeSheet(preview: @Composable () -> Unit, onDismiss: () -> U
             }
             // sliders apply while dragging and save on release
             LookSlider("Sensitivity", "${"%.1f".format(s.gain)}×", s.gain, 0.5f..2f) { VisualizerLook.update(s.copy(gain = it)) }
-            LookSlider("Smoothing", "${(s.smoothing * 100).roundToInt()}%", s.smoothing, 0f..0.9f) { VisualizerLook.update(s.copy(smoothing = it)) }
-            LookSlider("Bars", "${s.bars}", s.bars.toFloat(), 12f..48f, steps = 48 - 12 - 1) { VisualizerLook.update(s.copy(bars = it.roundToInt())) }
-            LookSwitch("Mirror", s.mirror) { set(s.copy(mirror = it)) }
             LookSwitch("Glow", s.glow) { set(s.copy(glow = it)) }
         }
     }

@@ -1,6 +1,9 @@
 package com.ctify.player.ui
 
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.IconButton
@@ -152,10 +155,11 @@ fun HomeScreen(
     var editing by rememberSaveable { mutableStateOf(false) }
     if (editing) HomeEditor(onDismiss = { editing = false })
 
+    val bar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     Box(Modifier.fillMaxSize()) {
     // Two colors: the liquid wash sits behind the header and fades out downward
     LiquidBackground(
-        Modifier.fillMaxWidth().height(280.dp)
+        Modifier.fillMaxWidth().height(280.dp + bar)
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
             .drawWithContent {
                 drawContent()
@@ -166,7 +170,7 @@ fun HomeScreen(
     LazyVerticalGrid(
         columns = GridCells.Adaptive(150.dp),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 12.dp, bottom = 16.dp),
+        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 12.dp + bar, bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -310,7 +314,9 @@ private fun TrackCarousel(
                         },
                 ) {
                     Box(Modifier.clip(MaterialTheme.shapes.small)) {
-                        AlbumArt(t, tile, shape = MaterialTheme.shapes.small)
+                        // big tiles ask for a sharper cover than the list-sized one saved with the song
+                        val art = if (tile >= 140.dp) t.copy(coverUri = t.coverUri?.let { com.ctify.player.ui.art.ArtistPhotos.large(it).replace("/mqdefault.jpg", "/hqdefault.jpg") }) else t
+                        AlbumArt(art, tile, shape = MaterialTheme.shapes.small)
                         SelectedMark(t, context)
                     }
                     Spacer(Modifier.height(6.dp))
@@ -362,7 +368,7 @@ private fun quickPicks(
     val repo = viewModel.repository
     fun play(list: List<Track>, i: Int) { repo.remember(list); viewModel.playQueue(list, i); onOpenNowPlaying() }
     buildList {
-        if (liked.isNotEmpty()) add(QuickPick("Liked songs", null, liked = true) { play(liked.shuffled(), 0) })
+        if (liked.isNotEmpty()) add(QuickPick("Liked songs", null, liked = true) { com.ctify.player.ui.library.PlayList.shuffle(repo, liked); onOpenNowPlaying() })
         playlists.take(3).forEach { pl ->
             add(QuickPick(pl.name, pl.trackIds.firstNotNullOfOrNull { repo.trackById(it) }, playlist = pl) { onOpenPage(HomePage.Playlist(pl.name)) })
         }

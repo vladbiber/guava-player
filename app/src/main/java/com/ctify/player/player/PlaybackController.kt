@@ -13,6 +13,8 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ShuffleOrder
 import com.ctify.player.data.MusicRepository
 import com.ctify.player.data.PlaybackState
 import com.ctify.player.data.Track
@@ -33,8 +35,11 @@ data class PlayerUiState(
     val shuffle: Boolean = false,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val volume: Float = 1f,
+    /** in play order, so a shuffled queue shows the order it really plays in */
     val queueIds: List<String> = emptyList(),
     val currentIndex: Int = -1,
+    /** queue index of each row of [queueIds]; differs from the row only while shuffled */
+    val queueOrder: List<Int> = emptyList(),
 )
 
 /** Custom session commands the app sends to [PlaybackController]. */
@@ -83,13 +88,14 @@ class PlaybackController(
     /** the track queue radio replaced, so the player's Now Playing switch can resume it */
     private var parked: Parked? = null
     private class Parked(val items: List<MediaItem>, val index: Int, val positionMs: Long)
-    /** the library songs a Recommended up next replaced, in play order; null while the library queue plays */
+    /** the library songs after the current one that a Recommended up next replaced, in queue order; null while the library queue plays */
     private var libraryUpcoming: List<MediaItem>? = null
     private var mixJob: Job? = null
     private var mixFor: String? = null
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) = sync()
+        override fun onShuffleModeEnabledChanged(on: Boolean) { if (on) reshuffle() }
         override fun onPlaybackStateChanged(state: Int) {
             if (state == Player.STATE_ENDED && PlayerHub.reverseOn.value) reverseStep(+1)
         }
@@ -220,6 +226,8 @@ class PlaybackController(
 
     private fun sync() {
         val rev = PlayerHub.reverseOn.value
+        val order = if (rev) null else playOrder()
+        val cur = player.currentMediaItemIndex
         PlayerHub.ui.value = PlayerUiState(
             currentTrackId = player.currentMediaItem?.mediaId?.removePrefix(REV),
             isPlaying = player.isPlaying,
@@ -228,11 +236,37 @@ class PlaybackController(
             shuffle = player.shuffleModeEnabled,
             repeatMode = player.repeatMode,
             volume = player.volume,
-            queueIds = if (rev) reverseQueue.map { it.id } else (0 until player.mediaItemCount).map { player.getMediaItemAt(it).mediaId },
-            currentIndex = if (rev) reverseIndex else player.currentMediaItemIndex,
+            queueIds = if (rev) reverseQueue.map { it.id } else order!!.map { player.getMediaItemAt(it).mediaId },
+            currentIndex = if (rev) reverseIndex else order!!.indexOf(cur),
+            queueOrder = if (rev) reverseQueue.indices.toList() else order!!,
         )
         publish()
         if (!rev) persistSnapshot()
+    }
+
+    /** Queue indexes in the order they play; plain 0..n-1 unless shuffled. */
+    private fun playOrder(): List<Int> {
+        val n = player.mediaItemCount
+        if (!player.shuffleModeEnabled || n == 0) return List(n) { it }
+        val tl = player.currentTimeline
+        return generateSequence(tl.getFirstWindowIndex(true).takeIf { it != C.INDEX_UNSET }) {
+            tl.getNextWindowIndex(it, Player.REPEAT_MODE_OFF, true).takeIf { i -> i != C.INDEX_UNSET }
+        }.toList()
+    }
+
+    /**
+     * A new shuffle that starts at the current song, so nothing is skipped. ExoPlayer's own order can put
+     * the current song anywhere, and the songs before it only play on repeat. While a Recommended mix
+     * plays, the songs up to the current one stay behind it, so the mix plays right after it.
+     */
+    private fun reshuffle() {
+        val exo = player as? ExoPlayer ?: return
+        val n = player.mediaItemCount
+        if (!player.shuffleModeEnabled || n == 0) return
+        val cur = player.currentMediaItemIndex
+        val head = if (libraryUpcoming != null) (0..cur).toList() else listOf(cur)
+        val rest = (0 until n).filter { it !in head }.shuffled()
+        exo.setShuffleOrder(ShuffleOrder.DefaultShuffleOrder((head + rest).toIntArray(), kotlin.random.Random.nextLong()))
     }
 
     /** In reverse mode the file runs backwards, so the shown position is mirrored. */
@@ -308,6 +342,7 @@ class PlaybackController(
             return
         }
         player.setMediaItems(tracks.map { it.toMediaItem() }, startIndex.coerceIn(0, tracks.lastIndex), 0L)
+        reshuffle()
         player.prepare()
         player.play()
     }
@@ -433,10 +468,11 @@ class PlaybackController(
             val saved = libraryUpcoming ?: return
             libraryUpcoming = null
             replaceUpcoming(saved)
+            reshuffle()
             return
         }
         val seed = repository.trackById(player.currentMediaItem?.mediaId) ?: return
-        val left = player.mediaItemCount - 1 - player.currentMediaItemIndex
+        val left = playOrder().let { it.size - 1 - it.indexOf(player.currentMediaItemIndex) }
         val first = libraryUpcoming == null
         if (!first && left >= LOW) return
         if (mixJob?.isActive == true && mixFor == seed.id) return
@@ -456,18 +492,11 @@ class PlaybackController(
             }
             if (player.currentMediaItem?.mediaId != seed.id || !UpNext.recommended.value || radio.active || PlayerHub.reverseOn.value) return@launch
             val items = songs.map { it.toMediaItem() }
-            if (libraryUpcoming != null) { player.addMediaItems(items); return@launch }
-            // saved in the order they would have played, so a shuffled queue comes back as it was
-            libraryUpcoming = generateSequence(player.currentMediaItemIndex) {
-                player.currentTimeline.getNextWindowIndex(it, Player.REPEAT_MODE_OFF, player.shuffleModeEnabled).takeIf { i -> i != C.INDEX_UNSET }
-            }.drop(1).map(player::getMediaItemAt).toList()
-            if (player.shuffleModeEnabled) {
-                // shuffled songs sit on both sides of the current one: keep only it, so the mix plays in order right after it
-                // shortcut: shuffle stays off after Library comes back (its songs return in their shuffled order)
-                player.shuffleModeEnabled = false
-                player.removeMediaItems(0, player.currentMediaItemIndex)
-            }
+            if (libraryUpcoming != null) { player.addMediaItems(items); reshuffle(); return@launch }
+            // queue order, not play order, so Library and shuffle off both bring the original order back
+            libraryUpcoming = (player.currentMediaItemIndex + 1 until player.mediaItemCount).map(player::getMediaItemAt)
             replaceUpcoming(items)
+            reshuffle()
         }
     }
 

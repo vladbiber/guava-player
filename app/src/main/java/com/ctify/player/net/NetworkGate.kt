@@ -23,7 +23,7 @@ enum class Feature(val label: String, val key: String) {
     VERSION_CHECK("Version check", "version_check"),
     SPOTIFY_IMPORT("Spotify playlist import", "spotify_import"),
     LASTFM("Genres and creators (Last.fm)", "lastfm"),
-    LYRICS("Lyrics (LRCLIB)", "lyrics"),
+    LYRICS("Lyrics", "lyrics"),
     LISTENBRAINZ("ListenBrainz", "listenbrainz"),
 }
 
@@ -43,6 +43,8 @@ object NetworkGate {
     val enabled = MutableStateFlow(Feature.entries.associateWith { true })
     val wifiOnlyStreaming = MutableStateFlow(false)
     val wifiOnlyDownloads = MutableStateFlow(true)
+    /** Musixmatch lyrics use an unofficial API, so they stay off until asked for. */
+    val musixmatch = MutableStateFlow(false)
 
     /** Radio Browser and MusicBrainz both ask for a User-Agent that names the app. */
     val userAgent = "GuavaPlayer/${BuildConfig.VERSION_NAME} (private build)"
@@ -83,12 +85,14 @@ object NetworkGate {
         enabled.value = Feature.entries.associateWith { p.getBoolean("feature_${it.key}", true) }
         wifiOnlyStreaming.value = p.getBoolean("wifi_only_streaming", false)
         wifiOnlyDownloads.value = p.getBoolean("wifi_only_downloads", true)
+        musixmatch.value = p.getBoolean("lyrics_musixmatch", false)
     }
 
     fun setOffline(v: Boolean) { offline.value = v; save() }
     fun setEnabled(f: Feature, v: Boolean) { enabled.value = enabled.value + (f to v); save() }
     fun setWifiOnlyStreaming(v: Boolean) { wifiOnlyStreaming.value = v; save() }
     fun setWifiOnlyDownloads(v: Boolean) { wifiOnlyDownloads.value = v; save() }
+    fun setMusixmatch(v: Boolean) { musixmatch.value = v; save() }
 
     /** null if [feature] may use the network right now, otherwise why not, in plain words. */
     fun blockReason(feature: Feature, traffic: Traffic = Traffic.LOOKUP): String? = when {
@@ -151,6 +155,7 @@ object NetworkGate {
             .putBoolean("offline", offline.value)
             .putBoolean("wifi_only_streaming", wifiOnlyStreaming.value)
             .putBoolean("wifi_only_downloads", wifiOnlyDownloads.value)
+            .putBoolean("lyrics_musixmatch", musixmatch.value)
         enabled.value.forEach { (f, on) -> e.putBoolean("feature_${f.key}", on) }
         e.apply()
     }

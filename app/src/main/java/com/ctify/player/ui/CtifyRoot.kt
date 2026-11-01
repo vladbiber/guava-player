@@ -86,6 +86,8 @@ import com.ctify.player.ui.theme.TextSecondary
 import com.ctify.player.ui.youtube.SpotifyImportDialog
 import com.ctify.player.youtube.YtIntake
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.material3.SnackbarHost
 import com.ctify.player.recommend.HiddenArtists
 import com.ctify.player.ui.songs.SelectionBar
@@ -239,7 +241,10 @@ fun CtifyRoot(viewModel: PlayerViewModel) = SharedTransitionLayout { Composition
             }
         },
     ) { inner ->
-        Box(Modifier.fillMaxSize().padding(inner)) {
+        // Home draws its wash under the status bar itself; everything else starts below it
+        val ld = androidx.compose.ui.platform.LocalLayoutDirection.current
+        val top = Modifier.padding(top = inner.calculateTopPadding())
+        Box(Modifier.fillMaxSize().padding(start = inner.calculateStartPadding(ld), end = inner.calculateEndPadding(ld), bottom = inner.calculateBottomPadding())) {
             val still = reducedMotion()
             AnimatedContent(tab, transitionSpec = {
                 // the new tab comes in from the side it sits on in the bar
@@ -248,7 +253,7 @@ fun CtifyRoot(viewModel: PlayerViewModel) = SharedTransitionLayout { Composition
                 else (slideInHorizontally(standardSpring()) { dir * it / 5 } + fadeIn(fastSpring())) togetherWith
                     (slideOutHorizontally(standardSpring()) { -dir * it / 5 } + fadeOut(fastSpring()))
             }, label = "tab") { page ->
-                when (page) {
+                Box(if (page == Tab.Home.ordinal) Modifier else top) { when (page) {
                     Tab.Home.ordinal -> HomeScreen(
                         viewModel,
                         onOpenNowPlaying = { showNowPlaying = true },
@@ -269,7 +274,7 @@ fun CtifyRoot(viewModel: PlayerViewModel) = SharedTransitionLayout { Composition
                         onSection = { librarySection = it },
                     )
                     else -> RadioScreen(onOpenWheel = openWheel, onOpenSettings = openSettings)
-                }
+                } }
             }
             AnimatedVisibility(
                 visible = showSearch,
@@ -277,7 +282,7 @@ fun CtifyRoot(viewModel: PlayerViewModel) = SharedTransitionLayout { Composition
                 exit = slideOutVertically(targetOffsetY = { it / 8 }) + fadeOut(),
             ) {
                 androidx.compose.material3.Surface(
-                    Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
+                    Modifier.fillMaxSize().then(top).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
                     color = BgBlack,
                 ) {
                     SearchOverlay(viewModel, searchScope, onClose = { showSearch = false }, onOpenDownloads = { showDownloads = true })
@@ -286,13 +291,13 @@ fun CtifyRoot(viewModel: PlayerViewModel) = SharedTransitionLayout { Composition
             pages.lastOrNull()?.let { page ->
                 BackHandler { pages.removeAt(pages.lastIndex) }
                 androidx.compose.material3.Surface(Modifier.fillMaxSize(), color = BgBlack) {
-                    key(pages.size) {
+                    key(pages.size) { Box(top) {
                         PageHost(
                             page, viewModel.repository, open = openPage,
                             back = { if (pages.isNotEmpty()) pages.removeAt(pages.lastIndex) },
                             replace = { if (pages.isNotEmpty()) pages[pages.lastIndex] = it },
                         )
-                    }
+                    } }
                 }
             }
         }

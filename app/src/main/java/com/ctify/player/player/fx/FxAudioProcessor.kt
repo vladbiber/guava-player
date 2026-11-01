@@ -123,6 +123,7 @@ class FxAudioProcessor(
             }
         }
         out.flip()
+        NierFeed.push(shorts, frames, rate)
         val now = System.nanoTime() / 1_000_000
         if (now - lastSpectrum > 70) {
             lastSpectrum = now
@@ -147,6 +148,7 @@ class FxAudioProcessor(
         chain = null
         limiter = null
         analyzer?.let { onSpectrum(it.clear()) }
+        NierFeed.clear()
     }
 
     private companion object {
