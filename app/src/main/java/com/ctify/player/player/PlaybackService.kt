@@ -90,7 +90,7 @@ class PlaybackService : MediaLibraryService() {
         var audioRetries = 0
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) audioRetries = 0
+                if (isPlaying) { audioRetries = 0; netRetries = 0 }
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -102,6 +102,12 @@ class PlaybackService : MediaLibraryService() {
                 ) {
                     player.prepare()
                     player.play()
+                } else if (error.errorCode in PlaybackException.ERROR_CODE_IO_UNSPECIFIED..PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT &&
+                    (!online() || netRetries++ < 5)
+                ) {
+                    // the connection dropped: stay on this song and resume it when the network is back, instead of skipping ahead
+                    waitingForNet = true
+                    if (online()) main.postDelayed({ resumeAfterNet() }, 3000)
                 } else if (player.hasNextMediaItem()) {
                     player.seekToNextMediaItem()
                     player.prepare()
@@ -109,6 +115,8 @@ class PlaybackService : MediaLibraryService() {
                 }
             }
         })
+
+        connectivity.registerDefaultNetworkCallback(netCallback)
 
         val app = application as CtifyApp
         playback = PlaybackController(this, player, app.repository, app.radio, ::showStationButtons)
@@ -228,7 +236,29 @@ class PlaybackService : MediaLibraryService() {
         }
     }
 
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val connectivity by lazy { getSystemService(android.net.ConnectivityManager::class.java) }
+    private var waitingForNet = false
+    private var netRetries = 0
+    private val netCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: android.net.Network) { main.postDelayed({ resumeAfterNet() }, 1000) }
+    }
+
+    private fun online(): Boolean = connectivity.getNetworkCapabilities(connectivity.activeNetwork)
+        ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+
+    private fun resumeAfterNet() {
+        if (!waitingForNet) return
+        waitingForNet = false
+        val player = mediaSession?.player ?: return
+        if (player.playbackState != Player.STATE_IDLE || player.playerError == null) return
+        // playWhenReady survives the error, so a pause made while offline stays paused
+        player.prepare()
+    }
+
     override fun onDestroy() {
+        runCatching { connectivity.unregisterNetworkCallback(netCallback) }
+        main.removeCallbacksAndMessages(null)
         GuavaWidgets.detach(this)
         playback?.release()
         playback = null

@@ -214,7 +214,8 @@ internal fun SongsPage(
                             val song = SongRadio.find(s.artist, s.title)
                             if (song == null) android.widget.Toast.makeText(ctx, "Not found on YouTube", android.widget.Toast.LENGTH_SHORT).show()
                             busy = null
-                            song?.let { SongRadio.play(repo, it) }
+                            // the list's next songs follow, so a genre or chart stays on it instead of drifting into a YouTube mix
+                            if (song != null) Top100.playAll(repo, songs.orEmpty().drop(i))
                         }
                     }
                     .padding(horizontal = 16.dp),

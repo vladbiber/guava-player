@@ -76,6 +76,7 @@ import com.ctify.player.ui.radio.radioRepo
 import com.ctify.player.ui.radio.rememberRadioUi
 import com.ctify.player.ui.radio.stationRows
 import com.ctify.player.ui.songs.Snack
+import com.ctify.player.ui.songs.SongActions
 import com.ctify.player.ui.songs.SongContext
 import com.ctify.player.ui.songs.SongRow
 import com.ctify.player.ui.theme.Accent
@@ -303,7 +304,7 @@ internal fun SearchResults(viewModel: PlayerViewModel, query: String, filter: Se
                 }
             }
             items(yt, key = { "y" + it.id }) { track ->
-                SongRow(track, SongContext.Search, yt, onPlay = { viewModel.repository.remember(yt); viewModel.playQueue(yt, yt.indexOf(track)) })
+                SongRow(track, SongContext.Search, yt, onPlay = { SongActions.songRadio(viewModel.repository, track) })
             }
         }
 
